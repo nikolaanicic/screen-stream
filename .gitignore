@@ -1,0 +1,4 @@
+.vscode
+go.mod
+go.sum
+*.exe
