@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"screen_stream/server"
 	"syscall"
+
 )
 
 func main() {
@@ -20,13 +22,17 @@ func main() {
 	go func(){
 		<-ch
 		srv.Stop()
-		srv.Close()
+		cancel()
 		os.Exit(0)
 	}()
 
-	if err := srv.ListenAndServe(); err != nil{
+	http.HandleFunc("/",srv.SpawnNewStream())
+	
+	if err := http.ListenAndServe(":8080",nil); err != nil{
 		fmt.Println(err)
 		cancel()
 		os.Exit(1)
 	}
+
+
 }

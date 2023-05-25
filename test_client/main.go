@@ -1,15 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
+	"image/jpeg"
 	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"fyne.io/fyne"
+	"fyne.io/fyne/app"
+	"fyne.io/fyne/canvas"
 	"github.com/gorilla/websocket"
 )
 
@@ -25,7 +30,6 @@ func main() {
 		os.Exit(1)
 	}
 
-
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT)
 
@@ -40,18 +44,18 @@ func main() {
 	fmt.Println("connected")
 
 	datachan := make(chan []byte)
-	ctx, cancel := context.WithTimeout(context.Background(),time.Second * 3)
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		<-ch
-		close(ch)
 		cancel()
 
 	}()
 
 	go func(ch chan []byte) {
-		for{
-			select{
+		for {
+			select {
 			case <-ctx.Done():
+				close(datachan)
 				return
 			default:
 				_, msg, err := conn.ReadMessage()
@@ -62,35 +66,49 @@ func main() {
 			}
 		}
 	}(datachan)
-	
+
 	fmt.Println("starting to listen for messages")
 
-	// enc := encoder.NewEncoder()
+	a := app.New()
+	w := a.NewWindow("My new window")
+	w.CenterOnScreen()
+	w.Resize(fyne.NewSize(840, 680))
+
+	w.SetOnClosed(func() {
+		cancel()
+	})
+
 	cnt := 0
-	for {
-		select {
-		case <-ctx.Done():
-			close(datachan)
-			fmt.Println("done: closing the connection")
-			fmt.Println("received",cnt,"images")
-			return
-			
-		case x := <-datachan:
-			cnt+= 1
-			// _,err := enc.Base64ToImage(x)
-			if err != nil{
-				fmt.Println(err)
-				continue
-			}
+	go func() {
+		samplePeriod := float64(1000) / float64(30)
+		ticker := time.NewTicker(time.Millisecond * time.Duration(samplePeriod))
 
-			f, err := os.Create(fmt.Sprintf("img_%d.jpg",cnt))
-			if err != nil{
-				fmt.Println(err)
-				continue
+		for {
+			select {
+			case <-ctx.Done():
+				close(datachan)
+				fmt.Println("done: closing the connection")
+				fmt.Println("received", cnt, "images")
+				
+				return
+
+			case x := <-datachan:
+				cnt++
+				img, err := jpeg.Decode(bytes.NewReader(x))
+				if err != nil {
+					fmt.Println(err)
+					continue
+				}
+
+				fimg := canvas.NewImageFromImage(img)
+				fimg.FillMode = canvas.ImageFillContain
+				<-ticker.C
+				w.SetContent(fimg)
+
 			}
-			f.Write(x)
-			f.Close()
 		}
-	}
+	}()
 
+
+	w.ShowAndRun()
 }

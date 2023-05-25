@@ -2,24 +2,26 @@ package encoder
 
 import (
 	"bytes"
-	"encoding/base64"
 	"image"
 	"image/jpeg"
 )
 
 type Encoder struct{}
 
-func (e *Encoder) BytesToBase64(m image.Image) (res string,err error) {
+func (e *Encoder) BytesToJpeg(m image.Image) ([]byte,error) {
 	buf := new(bytes.Buffer)
-	err = jpeg.Encode(buf,m,nil)
-	
-	if err != nil{
-		return
+	if err := jpeg.Encode(buf,m,nil);err != nil{
+		return nil, err
 	}
 
-	res = base64.StdEncoding.EncodeToString(buf.Bytes())
-	return
+	return buf.Bytes(), nil
 }
+
+
+func (e *Encoder) JpegToImage(i []byte)(image.Image, error){
+	return jpeg.Decode(bytes.NewReader(i))
+}
+
 
 func NewEncoder() *Encoder{
 	return &Encoder{}
