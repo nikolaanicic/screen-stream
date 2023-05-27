@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"screen_stream/server"
 	"syscall"
-
 )
 
 func main() {
@@ -33,6 +32,4 @@ func main() {
 		cancel()
 		os.Exit(1)
 	}
-
-
 }

@@ -7,9 +7,8 @@ import (
 
 func main() {
 	url := "ws://localhost:8080/"
-	
-	app := app.NewApp("streamer",log.Default())
 
+	app := app.NewApp("streamer",log.Default())
 	if err := app.Start(url); err != nil{
 		log.Fatal(err)
 	}

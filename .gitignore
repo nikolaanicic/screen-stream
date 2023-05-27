@@ -3,3 +3,5 @@ go.mod
 go.sum
 *.exe
 *.txt
+*.apk
+*.png

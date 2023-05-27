@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -34,6 +35,9 @@ func NewClient(ctx context.Context,l *log.Logger) *Client{
 func (c *Client) readLoop(){
 
 	c.log.Println("starting the reading loop")
+	d := float64(1000)/float64(30)
+
+	ticker := time.NewTicker(time.Millisecond * time.Duration(d))
 
 	for{
 		select{
@@ -42,7 +46,7 @@ func (c *Client) readLoop(){
 			c.Close()
 
 			return
-		default:
+		case <-ticker.C:
 			_, msg, err := c.conn.ReadMessage()
 			if err != nil{
 
@@ -54,6 +58,7 @@ func (c *Client) readLoop(){
 
 					return
 				}
+				
 				continue
 			}
 
