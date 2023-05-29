@@ -1,10 +1,8 @@
 package app
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"image/jpeg"
+	"image"
 	"log"
 	"screen_stream/test_client/webclient"
 	"time"
@@ -29,6 +27,8 @@ type App struct {
 	card *widget.Card
 	log *log.Logger
 	c *webclient.Client
+	img *image.RGBA
+	cimg *canvas.Image
 }
 
 
@@ -46,13 +46,19 @@ func NewApp(title string, l *log.Logger) *App{
 
 	a.window.SetOnClosed(a.onClose)
 
-
 	a.log = l
+
 	a.c = webclient.NewClient(a.ctx, a.log)
 	
 	a.card = widget.NewCard("stream","",nil)
 	a.window.SetContent(a.card)
-	
+
+	a.img = image.NewRGBA(image.Rect(0,0,2560,1080))
+	a.cimg = canvas.NewImageFromImage(a.img)
+
+	a.cimg.Image = a.img
+
+	a.card.SetContent(a.cimg)
 	return a
 }
 
@@ -73,14 +79,10 @@ func (a *App) renderLoop(c chan []byte){
 			case <-a.ctx.Done():
 				return
 			case x:= <-c:
-				img, err := jpeg.Decode(bytes.NewReader(x))
-				if err != nil {
-					fmt.Println(err)
-					continue
-				}
+				a.img.Pix = []uint8(x)
 
 				<-ticker.C
-				a.card.SetContent(canvas.NewImageFromImage(img))
+				a.cimg.Refresh()
 				a.card.Refresh()
 			}
 		}

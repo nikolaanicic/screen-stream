@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,10 +13,10 @@ import (
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
-	srv := server.NewServer(ctx,cancel)
+	srv := server.New(ctx,cancel,log.Default())
 
 	
-	ch := make(chan os.Signal,1)
+	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT)
 
 	go func(){

@@ -35,17 +35,18 @@ func NewClient(ctx context.Context,l *log.Logger) *Client{
 func (c *Client) readLoop(){
 
 	c.log.Println("starting the reading loop")
-	d := float64(1000)/float64(30)
+	d := float64(1000)/float64(25)
 
 	ticker := time.NewTicker(time.Millisecond * time.Duration(d))
 
 	for{
 		select{
 		case <-c.ctx.Done():
+			
 			close(c.datachan)
 			c.Close()
-
 			return
+
 		case <-ticker.C:
 			_, msg, err := c.conn.ReadMessage()
 			if err != nil{

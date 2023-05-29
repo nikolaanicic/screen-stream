@@ -46,7 +46,7 @@ func (d *Display) Capture() (*image.RGBA, error){
 
 func (d *Display) Sample(output io.Writer) error {
 	img, err := d.Capture()
-	
+
 	if err != nil{
 		return err
 	}else if err := jpeg.Encode(output,img,nil); err != nil{

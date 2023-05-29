@@ -3,8 +3,8 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
-	"screen_stream/encoder"
 	"screen_stream/screenmgr"
 	"time"
 
@@ -12,7 +12,9 @@ import (
 )
 
 var (
-	upgrader = websocket.Upgrader{}
+	upgrader = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {return true},
+	}
 )
 
 type Server struct {
@@ -20,18 +22,18 @@ type Server struct {
 	display *screenmgr.Display
 	cancel  context.CancelFunc
 	options Options
-	enc     *encoder.Encoder
+	log *log.Logger
 }
 
 var DefaultOptions Options = Options{sampleRate: 30}
 
-func NewServer(ctx context.Context, cancel context.CancelFunc) Server {
+func New(ctx context.Context, cancel context.CancelFunc,log *log.Logger) Server {
 	return Server{
 		ctx:     ctx,
 		cancel:  cancel,
-		enc:     encoder.NewEncoder(),
 		display: screenmgr.NewDisplay(0),
 		options: DefaultOptions,
+		log:log,
 	}
 
 }
@@ -44,19 +46,21 @@ func (s *Server) WithSampleRate(sampleRate int) *Server {
 func (s *Server) Stop() {
 	fmt.Println("stopping the server")
 	s.cancel()
+	
 }
 
 func (s *Server) SpawnNewStream() func(http.ResponseWriter, *http.Request) {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		
+
 		// creating the stream object for the current client
 		stream := screenmgr.NewStream(s.options.sampleRate, s.display)
 
-		upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 		ws, err := upgrader.Upgrade(w, r, nil)
 		
 		if err != nil {
 			w.Write([]byte(err.Error()))
+			s.log.Println(err)
+
 			return
 		}
 
@@ -82,6 +86,7 @@ func (s *Server) SpawnNewStream() func(http.ResponseWriter, *http.Request) {
 			for{
 				select{
 				case <- stream.Wait():
+					ticker.Stop()
 					return
 				case <-ticker.C:
 					ws.ReadMessage()
@@ -91,18 +96,19 @@ func (s *Server) SpawnNewStream() func(http.ResponseWriter, *http.Request) {
 
 
 		ch := stream.Start()
+
 		for {
 			select{
 			case <-stream.Wait():
 				return
 			case x := <- ch:
 				
-				// encoding image.RGBA to jpeg []byte
-				// sending the raw jpeg bytes to the clients
-				res, err := s.enc.BytesToJpeg(x)
+				// just sending the received pixels of the image.RGBA object
 				if err != nil {
+					s.log.Println(err)
 					return
-				}else if err = ws.WriteMessage(websocket.BinaryMessage, []byte(res)); err != nil {
+				}else if err = ws.WriteMessage(websocket.BinaryMessage, x.Pix); err != nil {
+					s.log.Println(err)
 					return
 				}
 			}

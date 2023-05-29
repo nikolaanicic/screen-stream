@@ -45,7 +45,7 @@ func (s *DisplayStream) Start() chan *image.RGBA{
 	samplePeriod := float64(1000) / float64(s.sampleRate)
 	sampleTicker := time.NewTicker(time.Millisecond * time.Duration(samplePeriod))
 
-
+	var img *image.RGBA
 	go func(){
 		for{
 			select{
@@ -55,7 +55,7 @@ func (s *DisplayStream) Start() chan *image.RGBA{
 				return
 				
 			case <-sampleTicker.C:
-				img, _ := s.display.Capture()
+				img, _ = s.display.Capture()
 				s.imgchan <- img
 		}
 	}
