@@ -5,3 +5,4 @@ go.sum
 *.txt
 *.apk
 *.png
+benchmarks/*

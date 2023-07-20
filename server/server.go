@@ -8,6 +8,8 @@ import (
 	"screen_stream/screenmgr"
 	"time"
 
+	userlib "os/user"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -49,9 +51,24 @@ func (s *Server) Stop() {
 	
 }
 
+func (s *Server) CheckUsername(uname string) error {
+	user, err := userlib.Current()
+	
+	if err != nil{
+		return err		
+	} else if user.Username != uname{
+		return fmt.Errorf("invalid username")
+	}
+
+	return nil
+}
+
+// pogledaj kako moze da se uporedi sifra koju korisnik posalje sa sifrom trenutno ulogovanog korisnika
+// ako ovo iznad ne moze da se uradi, napraviti bazu sa korisnicima kao za neki webapp
+
+
 func (s *Server) SpawnNewStream() func(http.ResponseWriter, *http.Request) {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		// creating the stream object for the current client
 		stream := screenmgr.NewStream(s.options.sampleRate, s.display)
 
@@ -102,7 +119,6 @@ func (s *Server) SpawnNewStream() func(http.ResponseWriter, *http.Request) {
 			case <-stream.Wait():
 				return
 			case x := <- ch:
-				
 				// just sending the received pixels of the image.RGBA object
 				if err != nil {
 					s.log.Println(err)

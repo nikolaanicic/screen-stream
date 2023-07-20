@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"time"
 
@@ -76,14 +77,18 @@ func (c *Client) SetOnClose(f func(code int, text string) error){
 }
 
 
-func (c *Client) Connect(addr string) (chan []byte, error){
+func (c *Client) Connect(addr string, uname string, pass string) (chan []byte, error){
 
 	var err error
 	if _, err = url.Parse(addr); err != nil{
 		return nil, err
 	}
 
-	c.conn, _, err = websocket.DefaultDialer.Dial(addr,nil)
+	headers := http.Header{}
+	headers.Add("uname",uname)
+	headers.Add("pass",pass)
+
+	c.conn, _, err = websocket.DefaultDialer.Dial(addr, headers)
 	if err != nil{
 		return nil, err
 	}

@@ -1,7 +1,6 @@
 package screenmgr
 
 import (
-	"context"
 	"fmt"
 	"image"
 	"time"
@@ -9,33 +8,34 @@ import (
 
 type DisplayStream struct {
 	sampleRate 	int
-	ctx context.Context
 	display *Display
 	imgchan chan *image.RGBA
-	cancel context.CancelFunc
-
+	closechan chan struct{}
 }
 
 func NewStream(sampleRate int,d *Display) *DisplayStream{
-	ctx, cancel := context.WithCancel(context.Background())
 
 	return &DisplayStream{
 		sampleRate: sampleRate,
-		ctx:ctx,
 		display: d,
 		imgchan: make(chan *image.RGBA, 1),
-		cancel: cancel,
+		closechan: make(chan struct{}),
+		
 	}
 }
 
 
 func (s *DisplayStream) Stop(){
 	fmt.Println("closing the stream")
-	s.cancel()
+	s.close()
+}
+
+func (s *DisplayStream) close(){
+	close(s.closechan)
 }
 
 func(s *DisplayStream) Wait() <-chan struct{}{
-	return s.ctx.Done()
+	return s.closechan
 }
 
 
@@ -49,7 +49,7 @@ func (s *DisplayStream) Start() chan *image.RGBA{
 	go func(){
 		for{
 			select{
-			case <-s.ctx.Done():
+			case <-s.closechan:
 				sampleTicker.Stop()
 				close(s.imgchan)
 				return

@@ -91,7 +91,7 @@ func (a *App) renderLoop(c chan []byte){
 
 
 func (a *App) Start(addr string) error{
-	c, err := a.c.Connect(addr)
+	c, err := a.c.Connect(addr,"","")
 	if err != nil{
 		return err
 	}
