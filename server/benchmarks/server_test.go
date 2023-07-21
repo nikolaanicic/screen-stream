@@ -2,10 +2,11 @@ package benchmarks
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"screen_stream/server"
+	cfg "screen_stream/util/config"
+
 	"testing"
 	"time"
 )
@@ -15,8 +16,13 @@ import (
 
 func BenchmarkServer(b *testing.B) {
 
-	ctx, cancel := context.WithTimeout(context.Background(),time.Minute)
-	srv := server.New(ctx,cancel,log.Default())
+	config, err := cfg.Load("../..")
+
+	if err != nil{
+		log.Fatal("can't load config from the path")
+	}
+
+	srv := server.New(config,log.Default())
 	
 	mux := http.NewServeMux()
 	mux.HandleFunc("/",srv.SpawnNewStream())
@@ -26,8 +32,7 @@ func BenchmarkServer(b *testing.B) {
 	
 	go func(){
 		if err := httpsrv.ListenAndServe(); err != nil{
-			fmt.Println(err)
-			cancel()
+			log.Println(err)
 			return
 		}
 	}()
@@ -36,6 +41,6 @@ func BenchmarkServer(b *testing.B) {
 	timer := time.NewTimer(time.Minute)
 	<-timer.C
 	srv.Stop()
-	httpsrv.Shutdown(ctx)
+	httpsrv.Shutdown(context.Background())
 
 }

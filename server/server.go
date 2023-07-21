@@ -1,14 +1,12 @@
 package server
 
 import (
-	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"screen_stream/screenmgr"
+	"screen_stream/util"
+	cfg "screen_stream/util/config"
 	"time"
-
-	userlib "os/user"
 
 	"github.com/gorilla/websocket"
 )
@@ -20,22 +18,22 @@ var (
 )
 
 type Server struct {
-	ctx     context.Context
 	display *screenmgr.Display
-	cancel  context.CancelFunc
+	cancelChan chan struct{}
 	options Options
 	log *log.Logger
+	config cfg.Config
 }
 
 var DefaultOptions Options = Options{sampleRate: 30}
 
-func New(ctx context.Context, cancel context.CancelFunc,log *log.Logger) Server {
+func New(config cfg.Config,log *log.Logger) Server {
 	return Server{
-		ctx:     ctx,
-		cancel:  cancel,
+		cancelChan:make(chan struct{}),
 		display: screenmgr.NewDisplay(0),
 		options: DefaultOptions,
 		log:log,
+		config: config,
 	}
 
 }
@@ -46,30 +44,41 @@ func (s *Server) WithSampleRate(sampleRate int) *Server {
 }
 
 func (s *Server) Stop() {
-	fmt.Println("stopping the server")
-	s.cancel()
+	s.log.Println("stopping the server")
+	close(s.cancelChan)
 	
 }
 
-func (s *Server) CheckUsername(uname string) error {
-	user, err := userlib.Current()
+// func (s *Server) CheckUsername(uname string) error {
+// 	user, err := userlib.Current()
 	
-	if err != nil{
-		return err		
-	} else if user.Username != uname{
-		return fmt.Errorf("invalid username")
-	}
-
-	return nil
-}
-
-// pogledaj kako moze da se uporedi sifra koju korisnik posalje sa sifrom trenutno ulogovanog korisnika
-// ako ovo iznad ne moze da se uradi, napraviti bazu sa korisnicima kao za neki webapp
+// 	if err != nil{
+// 		return err		
+// 	} else if user.Username != uname{
+// 		return fmt.Errorf("invalid username: %s", uname)
+// 	}
+	
+// 	return nil
+// }
 
 
 func (s *Server) SpawnNewStream() func(http.ResponseWriter, *http.Request) {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// creating the stream object for the current client
+		
+
+		uname := r.Header.Get("uname")
+		pass := r.Header.Get("pass")
+
+		if err := util.CompareHash(s.config.Password, pass);err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("invalid username or password"))
+			return
+		} else if err := util.CompareHash(s.config.Username, uname); err != nil{
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("invalid username or password"))
+			return
+		}
+
 		stream := screenmgr.NewStream(s.options.sampleRate, s.display)
 
 		ws, err := upgrader.Upgrade(w, r, nil)
@@ -105,6 +114,10 @@ func (s *Server) SpawnNewStream() func(http.ResponseWriter, *http.Request) {
 				case <- stream.Wait():
 					ticker.Stop()
 					return
+				case <- s.cancelChan:
+					stream.Stop()
+					ticker.Stop()
+					return
 				case <-ticker.C:
 					ws.ReadMessage()
 				}
@@ -117,6 +130,9 @@ func (s *Server) SpawnNewStream() func(http.ResponseWriter, *http.Request) {
 		for {
 			select{
 			case <-stream.Wait():
+				return
+			case <- s.cancelChan:
+				stream.Stop()
 				return
 			case x := <- ch:
 				// just sending the received pixels of the image.RGBA object

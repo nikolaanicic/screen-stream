@@ -6,3 +6,4 @@ go.sum
 *.apk
 *.png
 benchmarks/*
+*.env
