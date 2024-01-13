@@ -5,5 +5,6 @@ go.sum
 *.txt
 *.apk
 *.png
-benchmarks/*
+server/benchmarks/results/
+*.out
 *.env

@@ -1,7 +1,6 @@
 package screenmgr
 
 import (
-	"fmt"
 	"image"
 	"time"
 )
@@ -13,20 +12,17 @@ type DisplayStream struct {
 	closechan chan struct{}
 }
 
-func NewStream(sampleRate int,d *Display) *DisplayStream{
-
+func NewStream(sampleRate int, d *Display) *DisplayStream{
 	return &DisplayStream{
 		sampleRate: sampleRate,
 		display: d,
 		imgchan: make(chan *image.RGBA, 1),
 		closechan: make(chan struct{}),
-		
 	}
 }
 
 
 func (s *DisplayStream) Stop(){
-	fmt.Println("closing the stream")
 	s.close()
 }
 
@@ -40,7 +36,6 @@ func(s *DisplayStream) Wait() <-chan struct{}{
 
 
 func (s *DisplayStream) Start() chan *image.RGBA{
-	fmt.Println("starting the stream")
 
 	samplePeriod := float64(1000) / float64(s.sampleRate)
 	sampleTicker := time.NewTicker(time.Millisecond * time.Duration(samplePeriod))
@@ -53,7 +48,6 @@ func (s *DisplayStream) Start() chan *image.RGBA{
 				sampleTicker.Stop()
 				close(s.imgchan)
 				return
-				
 			case <-sampleTicker.C:
 				img, _ = s.display.Capture()
 				s.imgchan <- img

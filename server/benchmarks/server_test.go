@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"screen_stream/screenmgr"
 	"screen_stream/server"
 	cfg "screen_stream/util/config"
 
@@ -22,10 +23,11 @@ func BenchmarkServer(b *testing.B) {
 		log.Fatal("can't load config from the path")
 	}
 
-	srv := server.New(config,log.Default())
+	disp := screenmgr.NewDisplay(0)
+	srv := server.New(config,log.Default(), disp)
 	
 	mux := http.NewServeMux()
-	mux.HandleFunc("/",srv.SpawnNewStream())
+	mux.HandleFunc("/",srv.SpawnNewScreenStream())
 
 	httpsrv := &http.Server{Addr: ":8080",Handler: mux}
 	

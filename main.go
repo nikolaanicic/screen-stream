@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"screen_stream/screenmgr"
 	"screen_stream/server"
 	cfg "screen_stream/util/config"
 
@@ -19,7 +20,9 @@ func main() {
 		log.Fatal("can't load config from the path .",)
 	}
 
-	srv := server.New(config,log.Default())
+	log := log.New(os.Stdout,"[STREAM SERVER] ", 0)
+	disp := screenmgr.NewDisplay(0)
+	srv := server.New(config, log, disp)
 	
 	ch := make(chan os.Signal, 1)
 	
@@ -31,7 +34,8 @@ func main() {
 		os.Exit(0)
 	}()
 
-	http.HandleFunc("/",srv.SpawnNewStream())
+	http.HandleFunc("/screen",srv.SpawnNewScreenStream())
+	http.HandleFunc("/events", srv.SpawnNewEventsHandler())
 	
 	if err := http.ListenAndServe(":8080",nil); err != nil{
 		fmt.Println(err)

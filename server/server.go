@@ -3,12 +3,14 @@ package server
 import (
 	"log"
 	"net/http"
+	"screen_stream/eventsmgr"
 	"screen_stream/screenmgr"
 	"screen_stream/util"
 	cfg "screen_stream/util/config"
 	"time"
 
 	"github.com/gorilla/websocket"
+	hook "github.com/robotn/gohook"
 )
 
 var (
@@ -23,19 +25,20 @@ type Server struct {
 	options Options
 	log *log.Logger
 	config cfg.Config
+	eventManager *eventsmgr.EventManager
 }
 
 var DefaultOptions Options = Options{sampleRate: 30}
 
-func New(config cfg.Config,log *log.Logger) Server {
+func New(config cfg.Config,log *log.Logger, disp *screenmgr.Display) Server {
 	return Server{
 		cancelChan:make(chan struct{}),
-		display: screenmgr.NewDisplay(0),
+		display: disp,
 		options: DefaultOptions,
 		log:log,
 		config: config,
+		eventManager: &eventsmgr.EventManager{},
 	}
-
 }
 
 func (s *Server) WithSampleRate(sampleRate int) *Server {
@@ -49,31 +52,68 @@ func (s *Server) Stop() {
 	
 }
 
-// func (s *Server) CheckUsername(uname string) error {
-// 	user, err := userlib.Current()
-	
-// 	if err != nil{
-// 		return err		
-// 	} else if user.Username != uname{
-// 		return fmt.Errorf("invalid username: %s", uname)
-// 	}
-	
-// 	return nil
-// }
+func (s *Server) checkCredentials(r *http.Request) error{
+
+	uname := r.Header.Get("uname")
+	pass := r.Header.Get("pass")
+
+	if err := util.CompareHash(s.config.Password, pass);err != nil {
+		return err
+	} else if err := util.CompareHash(s.config.Username, uname); err != nil{
+		return err
+	}
+
+	return nil
+}
 
 
-func (s *Server) SpawnNewStream() func(http.ResponseWriter, *http.Request) {
+func (s *Server) SpawnNewEventsHandler() func(http.ResponseWriter, *http.Request){
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		
 
-		uname := r.Header.Get("uname")
-		pass := r.Header.Get("pass")
-
-		if err := util.CompareHash(s.config.Password, pass);err != nil {
+		if err := s.checkCredentials(r); err != nil{
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte("invalid username or password"))
 			return
-		} else if err := util.CompareHash(s.config.Username, uname); err != nil{
+		}
+
+		ws, err := upgrader.Upgrade(w, r, nil)
+
+		if err != nil{
+			w.Write([]byte(err.Error()))
+			s.log.Println(err)
+
+			return
+		}
+
+		defer ws.Close()
+
+		ws.SetCloseHandler(func(code int, text string) error {
+			return ws.WriteControl(websocket.CloseMessage,[]byte{},time.Now().Add(time.Second))
+		})
+
+		var e hook.Event
+		for{
+			select{
+			case <- s.cancelChan:
+				return
+			default:
+				err := ws.ReadJSON(&e)
+				if err != nil{
+					s.log.Println(err)
+					return
+				}
+				
+				s.eventManager.HandleEvent(&e)
+			}
+		}
+
+	})
+}
+
+func (s *Server) SpawnNewScreenStream() func(http.ResponseWriter, *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		if err := s.checkCredentials(r); err != nil{
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte("invalid username or password"))
 			return
@@ -95,18 +135,11 @@ func (s *Server) SpawnNewStream() func(http.ResponseWriter, *http.Request) {
 			stream.Stop()
 		}()
 
-		// when the ws handler receives a close message it should stop the stream
-		// and send back the close handshake message
 		ws.SetCloseHandler(func(code int, text string) error {
 			stream.Stop()
 			return ws.WriteControl(websocket.CloseMessage,[]byte{},time.Now().Add(time.Second))
 		})
-
-
-		// starting a function that reads the connection
-		// above function in setclosehandler gets triggered 
-		// when a close message is read in ReadMessage()
-		// reading the connection every second to see if it was closed already
+	
 		go func(){
 			ticker := time.NewTicker(time.Second)
 			for{
@@ -135,7 +168,6 @@ func (s *Server) SpawnNewStream() func(http.ResponseWriter, *http.Request) {
 				stream.Stop()
 				return
 			case x := <- ch:
-				// just sending the received pixels of the image.RGBA object
 				if err != nil {
 					s.log.Println(err)
 					return
