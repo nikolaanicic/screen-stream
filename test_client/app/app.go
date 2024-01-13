@@ -50,7 +50,7 @@ func NewApp(title string, l *log.Logger) *App{
 
 	a.c = webclient.NewClient(a.ctx, a.log)
 	
-	a.card = widget.NewCard("stream","",nil)
+	a.card = widget.NewCard("Screen Stream Test Client","",nil)
 	a.window.SetContent(a.card)
 
 	a.img = image.NewRGBA(image.Rect(0,0,2560,1080))
@@ -91,12 +91,17 @@ func (a *App) renderLoop(c chan []byte){
 
 
 func (a *App) Start(addr string) error{
-	c, err := a.c.Connect(addr,"Nikola","anicic")
+	scrCh, err := a.c.ConnectScreen(addr + "screen","Nikola","anicic")
+	
 	if err != nil{
 		return err
 	}
 
-	go a.renderLoop(c)
+	if err := a.c.ConnectEvents(addr + "events","Nikola", "anicic"); err != nil{
+		return err
+	}
+
+	go a.renderLoop(scrCh)
 	a.window.ShowAndRun()
 
 	return nil

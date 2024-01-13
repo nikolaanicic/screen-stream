@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"screen_stream/test_client/events"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,6 +17,7 @@ type Client struct {
 	ctx context.Context
 	datachan chan []byte
 	log *log.Logger
+	eventCatcher *events.EventCatcher
 	
 }
 
@@ -25,46 +27,59 @@ func NewClient(ctx context.Context,l *log.Logger) *Client{
 		ctx:ctx,
 		datachan: make(chan []byte),
 		log:l,
+		eventCatcher: events.New(),
 	}
 }
 
-// the main readling loop of the client
-// receives a message and checks for closing errors
-// if there is a closing error it closes the connection and returns
-// if there is a context cancel from the app it closes the connection and returns
+func (c *Client) startReadLoop(conn *websocket.Conn) chan []byte{
 
-func (c *Client) readLoop(){
-
-	c.log.Println("starting the reading loop")
-	d := float64(1000)/float64(25)
+	d := float64(1000)/float64(30)
+	datachan := make(chan []byte)
 
 	ticker := time.NewTicker(time.Millisecond * time.Duration(d))
 
-	for{
-		select{
-		case <-c.ctx.Done():
-			
-			close(c.datachan)
-			c.Close()
-			return
+	go func(){
+		for{
+			select{
+			case <-c.ctx.Done():
+				close(datachan)
+				c.Close()
 
-		case <-ticker.C:
-			_, msg, err := c.conn.ReadMessage()
-			if err != nil{
+				return
+	
+			case <-ticker.C:
+				_, msg, err := conn.ReadMessage()
 
-				c.log.Println(err)
-
-				if _,ok := err.(*websocket.CloseError); ok{
-					close(c.datachan)
-					c.Close()
-
-					return
+				if err != nil{
+					c.log.Println(err)
+	
+					if _,ok := err.(*websocket.CloseError); ok{
+						close(datachan)
+						c.Close()
+						return
+					}
+					
+					continue
 				}
-				
-				continue
+	
+				datachan <- msg
 			}
+		}
+	}()
 
-			c.datachan <- msg
+	return datachan
+}
+
+func (c *Client) startEventWriteLoop(conn *websocket.Conn){
+	eventCh := c.eventCatcher.Start()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			c.eventCatcher.Stop()
+			return
+		case e := <-eventCh:
+			conn.WriteJSON(e)
 		}
 	}
 }
@@ -77,7 +92,31 @@ func (c *Client) SetOnClose(f func(code int, text string) error){
 }
 
 
-func (c *Client) Connect(addr string, uname string, pass string) (chan []byte, error){
+func (c *Client) ConnectEvents(addr string, uname string, pass string) error {
+	var err error
+	if _, err = url.Parse(addr); err != nil{
+		return err
+	}
+
+	headers := http.Header{}
+	headers.Add("uname",uname)
+	headers.Add("pass",pass)
+
+	conn, _, err := websocket.DefaultDialer.Dial(addr, headers)
+	if err != nil{
+		return err
+	}
+
+	fmt.Println("connected:",addr)
+
+	go c.startEventWriteLoop(conn)
+
+	return nil
+}
+
+
+
+func (c *Client) ConnectScreen(addr string, uname string, pass string) (chan []byte, error){
 
 	var err error
 	if _, err = url.Parse(addr); err != nil{
@@ -88,16 +127,16 @@ func (c *Client) Connect(addr string, uname string, pass string) (chan []byte, e
 	headers.Add("uname",uname)
 	headers.Add("pass",pass)
 
-	c.conn, _, err = websocket.DefaultDialer.Dial(addr, headers)
+	conn, _, err := websocket.DefaultDialer.Dial(addr, headers)
 	if err != nil{
 		return nil, err
 	}
 
 	fmt.Println("connected:",addr)
 
-	go c.readLoop()
+	datachan := c.startReadLoop(conn)
 
-	return c.datachan, nil
+	return datachan, nil
 }
 
 func (c *Client) Close() error{
