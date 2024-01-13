@@ -19,7 +19,7 @@ func New() *EventCatcher{
 
 func (e *EventCatcher) isAllowedEvent(event *hook.Event) bool{
 	switch event.Kind{
-	case hook.MouseDown, hook.MouseMove, hook.MouseWheel:
+	case hook.MouseDown, hook.MouseMove, hook.MouseWheel, hook.MouseDrag, hook.KeyDown:
 		return true
 	default:
 		return false
